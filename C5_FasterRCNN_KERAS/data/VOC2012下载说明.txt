@@ -1,0 +1,4 @@
+网盘http://pan.baidu.com/s/1eSpGhBc上下载PASCAL VOC数据集：
+VOCtrainval_11-May-2012.tar
+
+然后解压，把VOC2012覆盖到当前路径
