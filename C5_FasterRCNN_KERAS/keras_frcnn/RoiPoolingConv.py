@@ -62,17 +62,16 @@ class RoiPoolingConv(Layer):
             x = rois[0, roi_idx, 0]
             y = rois[0, roi_idx, 1]
             w = rois[0, roi_idx, 2]
-            h = rois[0, roi_idx, 3]
-            
-            row_length = w / float(self.pool_size)
-            col_length = h / float(self.pool_size)
-
-            num_pool_regions = self.pool_size
+            h = rois[0, roi_idx, 3]            
 
             #NOTE: the RoiPooling implementation differs between theano and tensorflow due to the lack of a resize op
             # in theano. The theano implementation is much less efficient and leads to long compile times
-
             if self.dim_ordering == 'th':
+                #                            
+                row_length = w / float(self.pool_size)
+                col_length = h / float(self.pool_size)
+                num_pool_regions = self.pool_size
+                #
                 for jy in range(num_pool_regions):
                     for ix in range(num_pool_regions):
                         x1 = x + ix * row_length
@@ -96,18 +95,20 @@ class RoiPoolingConv(Layer):
                         pooled_val = K.max(xm, axis=(2, 3))
                         outputs.append(pooled_val)
 
+            # tensorflow way of doing Roi Pooling
             elif self.dim_ordering == 'tf':
                 x = K.cast(x, 'int32')
                 y = K.cast(y, 'int32')
                 w = K.cast(w, 'int32')
                 h = K.cast(h, 'int32')
-
+                # use resize to implement Roi Pooling
                 rs = tf.image.resize_images(img[:, y:y+h, x:x+w, :], (self.pool_size, self.pool_size))
                 outputs.append(rs)
-
+        # merge and reshape
         final_output = K.concatenate(outputs, axis=0)
         final_output = K.reshape(final_output, (1, self.num_rois, self.pool_size, self.pool_size, self.nb_channels))
-
+        
+        # rearrange dimension sequence
         if self.dim_ordering == 'th':
             final_output = K.permute_dimensions(final_output, (0, 1, 4, 2, 3))
         else:

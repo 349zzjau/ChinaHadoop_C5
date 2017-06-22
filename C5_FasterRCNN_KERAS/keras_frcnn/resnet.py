@@ -8,11 +8,8 @@ Adapted from code contributed by BigMoyan.
 from __future__ import print_function
 from __future__ import absolute_import
 
-from keras.layers import Input, Add, Dense, Activation, Flatten, Convolution2D, MaxPooling2D, ZeroPadding2D, \
-    AveragePooling2D, TimeDistributed
-
+from keras.layers import Input, Add, Dense, Activation, Flatten, Convolution2D, MaxPooling2D, ZeroPadding2D, AveragePooling2D, TimeDistributed
 from keras import backend as K
-
 from keras_frcnn.RoiPoolingConv import RoiPoolingConv
 from keras_frcnn.FixedBatchNormalization import FixedBatchNormalization
 
@@ -135,7 +132,7 @@ def conv_block_td(input_tensor, kernel_size, filters, stage, block, input_shape,
     return x
 
 def nn_base(input_tensor=None, trainable=False):
-
+    # all shared convolutional layers for rpn and faster r-cnn
     # Determine proper input shape
     if K.image_dim_ordering() == 'th':
         input_shape = (3, None, None)
@@ -198,32 +195,43 @@ def classifier_layers(x, input_shape, trainable=False):
 
 
 def rpn(base_layers,num_anchors):
-
+    
+    # 3x3,512d convolution 
     x = Convolution2D(512, (3, 3), padding='same', activation='relu', kernel_initializer='normal', name='rpn_conv1')(base_layers)
-
+    # 1x1,9d convolution
     x_class = Convolution2D(num_anchors, (1, 1), activation='sigmoid', kernel_initializer='uniform', name='rpn_out_class')(x)
+    # 1x1,36d convolution
     x_regr = Convolution2D(num_anchors * 4, (1, 1), activation='linear', kernel_initializer='zero', name='rpn_out_regress')(x)
-
+    
     return [x_class, x_regr, base_layers]
 
 def classifier(base_layers, input_rois, num_rois, nb_classes = 21, trainable=False):
 
     # compile times on theano tend to be very high, so we use smaller ROI pooling regions to workaround
 
+    # Roi pooling setting
     if K.backend() == 'tensorflow':
+        # 14X14 RoI pooling
         pooling_regions = 14
         input_shape = (num_rois,14,14,1024)
     elif K.backend() == 'theano':
         pooling_regions = 7
         input_shape = (num_rois,1024,7,7)
-
+    
+    # Roi pooling layer
     out_roi_pool = RoiPoolingConv(pooling_regions, num_rois)([base_layers, input_rois])
+    
+    # classifier layers for multiple roi features
     out = classifier_layers(out_roi_pool, input_shape=input_shape, trainable=True)
-
+    
+    # flatten 2D feature to 1D
     out = TimeDistributed(Flatten())(out)
 
+    # add fullly connected layer to infer class score
     out_class = TimeDistributed(Dense(nb_classes, activation='softmax', kernel_initializer='zero'), name='dense_class_{}'.format(nb_classes))(out)
+    
     # note: no regression target for bg class
     out_regr = TimeDistributed(Dense(4 * (nb_classes-1), activation='linear', kernel_initializer='zero'), name='dense_regress_{}'.format(nb_classes))(out)
+    
     return [out_class, out_regr]
 

@@ -22,7 +22,7 @@ from keras.utils import generic_utils
 sys.setrecursionlimit(40000)
 
 
-# 训练参数设置及获取
+# training parameters from command line
 parser = OptionParser()
 parser.add_option("-p", "--path", dest="train_path", help="Path to training data.", default="data/")
 parser.add_option("-n", "--num_rois", dest="num_rois", help="Number of ROIs per iteration. Higher means more memory use.", default=32)
@@ -76,22 +76,27 @@ print('Num val samples {}'.format(len(val_imgs)))
 data_gen_train = data_generators.get_anchor_gt(train_imgs, classes_count, C, K.image_dim_ordering(), mode='train')
 #data_gen_val = data_generators.get_anchor_gt(val_imgs, classes_count, C, K.image_dim_ordering(), mode='val')
 
+# set input format according to the backend
 if K.image_dim_ordering() == 'th':
     input_shape_img = (3, None, None)
 else:
+    # tensorflow: (W,H,C)
     input_shape_img = (None, None, 3)
 
+# set up two inputs
 img_input = Input(shape=input_shape_img)
 roi_input = Input(shape=(C.num_rois, 4))
 
-# define the base network (resnet here, can be VGG, Inception, etc)
+# define the base network - resnet
 shared_layers = nn.nn_base(img_input, trainable=True)
 
 # define the RPN, built on the base layers
 num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)
 rpn = nn.rpn(shared_layers, num_anchors)
 
+# classifier and regression model for roi feature
 classifier = nn.classifier(shared_layers, roi_input, C.num_rois, nb_classes=len(classes_count), trainable=True)
+
 
 model_rpn = Model(img_input, rpn[:2])
 model_classifier = Model([img_input, roi_input], classifier)
